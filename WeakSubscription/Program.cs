@@ -1,34 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
+using GalaSoft.MvvmLight.Messaging;
 
 namespace WeakSubscription
 {
-    public class Messenger
-    {
-        public static readonly Messenger Instance = new Messenger();
-
-        private List<Action<string>> _callbacks = new List<Action<string>>();
-
-        public void Subscribe(Action<string> callback)
-        {
-            _callbacks.Add(callback);
-        }
-
-        public void Unsubscribe(Action<string> callback)
-        {
-            _callbacks.Remove(callback);
-        }
-
-        public void Publish(string message)
-        {
-            foreach (var callback in _callbacks)
-            {
-                callback.Invoke(message);
-            }
-        }
-    }
-
     public class Subscriber
     {
         private string _name;
@@ -36,7 +11,7 @@ namespace WeakSubscription
         public Subscriber(string name)
         {
             _name = name;
-            Messenger.Instance.Subscribe(m => Console.WriteLine("{0} received \"{1}\"", _name, m));
+            Messenger.Default.Register<string>(this, m => Console.WriteLine("{0} received \"{1}\"", _name, m));
         }
 
         public string Name { get { return _name; } }
@@ -49,12 +24,12 @@ namespace WeakSubscription
             var s1 = new Subscriber("s1");
             new Subscriber("s2");
 
-            Messenger.Instance.Publish("Hello");
+            Messenger.Default.Send("Hello");
 
             GC.Collect();
             GC.WaitForFullGCComplete();
 
-            Messenger.Instance.Publish("World");
+            Messenger.Default.Send("World");
         }
     }
 }
