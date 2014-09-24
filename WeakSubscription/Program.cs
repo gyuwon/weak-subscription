@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 namespace WeakSubscription
 {
@@ -8,42 +9,49 @@ namespace WeakSubscription
     {
         public static readonly Messenger Instance = new Messenger();
 
-        private List<WeakReference<Action<string>>> _callbacks = new List<WeakReference<Action<string>>>();
+        private class Subscription
+        {
+            public WeakReference<object> Subscriber { get; set; }
+
+            public Action<object, string> Callback { get; set; }
+        }
+
+        private List<Subscription> _subscriptions = new List<Subscription>();
+        private MethodInfo _createCallbackTemplate;
+
+        public Messenger()
+        {
+            _createCallbackTemplate = typeof(Messenger).GetTypeInfo().GetMethod("CreateCallback");
+        }
 
         public void Subscribe(Action<string> callback)
         {
-            _callbacks.Add(new WeakReference<Action<string>>(callback));
+            var subscription = new Subscription
+            {
+                Subscriber = new WeakReference<object>(callback.Target),
+                Callback = (Action<object, string>)_createCallbackTemplate
+                                                   .MakeGenericMethod(callback.Target.GetType())
+                                                   .Invoke(this, new object[] { callback.Method })
+            };
+            _subscriptions.Add(subscription);
         }
 
-        public void Unsubscribe(Action<string> callback)
+        public Action<object, string> CreateCallback<T>(MethodInfo method)
         {
-            int? index = null;
-            for (int i = 0; i < _callbacks.Count; i++)
-            {
-                var reference = _callbacks[i];
-                Action<string> target;
-                if (reference.TryGetTarget(out target) && target == callback)
-                {
-                    index = i;
-                    break;
-                }
-            }
-            if (null != index)
-            {
-                _callbacks.RemoveAt(index.Value);
-            }
+            var callback = (Action<T, string>)method.CreateDelegate(typeof(Action<T, string>));
+            return (target, message) => callback.Invoke((T)target, message);
         }
 
         public void Publish(string message)
         {
             var collected = new List<int>();
-            for (int i = 0; i < _callbacks.Count; i++)
+            for (int i = 0; i < _subscriptions.Count; i++)
             {
-                var reference = _callbacks[i];
-                Action<string> callback;
-                if (reference.TryGetTarget(out callback))
+                var subscription = _subscriptions[i];
+                object subscriber;
+                if (subscription.Subscriber.TryGetTarget(out subscriber))
                 {
-                    callback.Invoke(message);
+                    subscription.Callback.Invoke(subscriber, message);
                 }
                 else
                 {
@@ -53,7 +61,7 @@ namespace WeakSubscription
             collected.Reverse();
             foreach (var index in collected)
             {
-                _callbacks.RemoveAt(index);
+                _subscriptions.RemoveAt(index);
             }
         }
     }
