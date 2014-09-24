@@ -73,7 +73,7 @@ namespace WeakSubscription
         public Subscriber(string name)
         {
             _name = name;
-            Messenger.Instance.Subscribe(m => Console.WriteLine("{0} received \"{1}\"", _name, m));
+            Messenger.Instance.Subscribe(m => Console.WriteLine("{0} received \"{1}\"", name, m));
         }
 
         public string Name { get { return _name; } }
