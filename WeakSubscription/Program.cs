@@ -1,9 +1,63 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
-using Xamarin.Forms;
 
 namespace WeakSubscription
 {
+    public class Messenger
+    {
+        public static readonly Messenger Instance = new Messenger();
+
+        private List<WeakReference<Action<string>>> _callbacks = new List<WeakReference<Action<string>>>();
+
+        public void Subscribe(Action<string> callback)
+        {
+            _callbacks.Add(new WeakReference<Action<string>>(callback));
+        }
+
+        public void Unsubscribe(Action<string> callback)
+        {
+            int? index = null;
+            for (int i = 0; i < _callbacks.Count; i++)
+            {
+                var reference = _callbacks[i];
+                Action<string> target;
+                if (reference.TryGetTarget(out target) && target == callback)
+                {
+                    index = i;
+                    break;
+                }
+            }
+            if (null != index)
+            {
+                _callbacks.RemoveAt(index.Value);
+            }
+        }
+
+        public void Publish(string message)
+        {
+            var collected = new List<int>();
+            for (int i = 0; i < _callbacks.Count; i++)
+            {
+                var reference = _callbacks[i];
+                Action<string> callback;
+                if (reference.TryGetTarget(out callback))
+                {
+                    callback.Invoke(message);
+                }
+                else
+                {
+                    collected.Add(i);
+                }
+            }
+            collected.Reverse();
+            foreach (var index in collected)
+            {
+                _callbacks.RemoveAt(index);
+            }
+        }
+    }
+
     public class Subscriber
     {
         private string _name;
@@ -11,7 +65,7 @@ namespace WeakSubscription
         public Subscriber(string name)
         {
             _name = name;
-            MessagingCenter.Subscribe<object>(this, "Hello", _ => Console.WriteLine("{0} received", _name));
+            Messenger.Instance.Subscribe(m => Console.WriteLine("{0} received \"{1}\"", _name, m));
         }
 
         public string Name { get { return _name; } }
@@ -21,17 +75,15 @@ namespace WeakSubscription
     {
         private static void Main(string[] args)
         {
-            object sender = new object();
-
             var s1 = new Subscriber("s1");
             new Subscriber("s2");
 
-            MessagingCenter.Send(sender, "Hello");
+            Messenger.Instance.Publish("Hello");
 
             GC.Collect();
             GC.WaitForFullGCComplete();
 
-            MessagingCenter.Send(sender, "Hello");
+            Messenger.Instance.Publish("World");
         }
     }
 }
