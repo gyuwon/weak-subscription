@@ -11,35 +11,23 @@ namespace WeakSubscription
 
         private class Subscription
         {
-            public WeakReference<object> Subscriber { get; set; }
+            public WeakReference<Subscriber> Subscriber { get; set; }
 
-            public Action<object, string> Callback { get; set; }
+            public Action<Subscriber, string> Callback { get; set; }
         }
 
         private List<Subscription> _subscriptions = new List<Subscription>();
-        private MethodInfo _createCallbackTemplate;
-
-        public Messenger()
-        {
-            _createCallbackTemplate = typeof(Messenger).GetTypeInfo().GetMethod("CreateCallback");
-        }
 
         public void Subscribe(Action<string> callback)
         {
-            var subscription = new Subscription
+            var target = callback.Target;
+            var method = callback.Method;
+            var delegateType = typeof(Action<Subscriber, string>);
+            _subscriptions.Add(new Subscription
             {
-                Subscriber = new WeakReference<object>(callback.Target),
-                Callback = (Action<object, string>)_createCallbackTemplate
-                                                   .MakeGenericMethod(callback.Target.GetType())
-                                                   .Invoke(this, new object[] { callback.Method })
-            };
-            _subscriptions.Add(subscription);
-        }
-
-        public Action<object, string> CreateCallback<T>(MethodInfo method)
-        {
-            var callback = (Action<T, string>)method.CreateDelegate(typeof(Action<T, string>));
-            return (target, message) => callback.Invoke((T)target, message);
+                Subscriber = new WeakReference<Subscriber>((Subscriber)target),
+                Callback = (Action<Subscriber, string>)method.CreateDelegate(delegateType)
+            });
         }
 
         public void Publish(string message)
@@ -48,7 +36,7 @@ namespace WeakSubscription
             for (int i = 0; i < _subscriptions.Count; i++)
             {
                 var subscription = _subscriptions[i];
-                object subscriber;
+                Subscriber subscriber;
                 if (subscription.Subscriber.TryGetTarget(out subscriber))
                 {
                     subscription.Callback.Invoke(subscriber, message);
