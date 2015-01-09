@@ -11,7 +11,10 @@ namespace WeakSubscription
         public Subscriber(string name)
         {
             _name = name;
-            MessagingCenter.Subscribe<object>(this, "Hello", _ => Console.WriteLine("{0} received", _name));
+            MessagingCenter.Subscribe<object, string>(
+                subscriber: this,
+                   message: "Greeting",
+                  callback: (s, m) => Console.WriteLine("{0} received \"{1}\"", _name, m));
         }
 
         public string Name { get { return _name; } }
@@ -26,12 +29,12 @@ namespace WeakSubscription
             var s1 = new Subscriber("s1");
             new Subscriber("s2");
 
-            MessagingCenter.Send(sender, "Hello");
+            MessagingCenter.Send(sender, "Greeting", "Hello");
 
             GC.Collect();
             GC.WaitForFullGCComplete();
 
-            MessagingCenter.Send(sender, "Hello");
+            MessagingCenter.Send(sender, "Greeting", "World");
         }
     }
 }
